@@ -224,7 +224,9 @@ namespace WarOfBalls
         static Shader lit, unlit; static bool ready;
         public static bool URP;
         static Dictionary<string, Material> cache = new Dictionary<string, Material>();
-        public static void Reset() { ready = false; cache.Clear(); }
+        static Dictionary<Texture, int> texIds = new Dictionary<Texture, int>();
+        static string TexKey(Texture t) { int id; if (!texIds.TryGetValue(t, out id)) { id = texIds.Count + 1; texIds[t] = id; } return id.ToString(); } // works on every Unity version
+        public static void Reset() { ready = false; cache.Clear(); texIds.Clear(); }
         public static void Init()
         {
             if (ready) return; ready = true;
@@ -271,7 +273,7 @@ namespace WarOfBalls
         // unlit, alpha-blended, vertex-coloured, double sided (Sprites/Default)
         public static Material Unlit(Color c, Texture tex = null, int queue = 3000)
         {
-            Init(); string key = "U" + Key(c) + "|" + (tex != null ? tex.GetInstanceID().ToString() : "-") + "|" + queue;
+            Init(); string key = "U" + Key(c) + "|" + (tex != null ? TexKey(tex) : "-") + "|" + queue;
             Material m; if (cache.TryGetValue(key, out m) && m != null) return m;
             m = new Material(unlit); m.color = c; if (tex != null) m.mainTexture = tex; m.renderQueue = queue; cache[key] = m; return m;
         }
