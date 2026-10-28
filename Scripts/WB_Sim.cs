@@ -85,7 +85,7 @@ namespace WarOfBalls
         {
             Squad sq = u.sq; Vector2 o = u.slot < sq.offs.Count ? sq.offs[u.slot] : Vector2.zero;
             float cs = Mathf.Cos(sq.dir), sn = Mathf.Sin(sq.dir), lat = o.y;
-            if (Mathf.Abs(sq.ay - K.BY) < K.BW + 50 && sq.ax > K.BXA - 60 && sq.ax < K.BXB + 60) lat = K.Clamp(lat, -(K.BW - 10), K.BW - 10); // squeeze into a column on the bridge
+            if (Terra.BridgeGap(sq.ay) < K.BW + 50 && sq.ax > K.BXA - 60 && sq.ax < K.BXB + 60) lat = K.Clamp(lat, -(K.BW - 10), K.BW - 10); // squeeze into a column on the bridge
             return new Vector2(K.Clamp(sq.ax + o.x * cs - lat * sn, K.WX0 + u.T.r, K.WX1 - u.T.r), K.Clamp(sq.ay + o.x * sn + lat * cs, K.WY0 + u.T.r, K.WY1 - u.T.r));
         }
 
@@ -122,7 +122,9 @@ namespace WarOfBalls
                 foreach (float a in angs[ti])
                 {
                     Vector2 s = Terra.ShoreSpot(I, a, 1.09f), l = Terra.ShoreSpot(I, a, 0.97f);
-                    MakeSquad(ti, 7, 1, new Mul(), s.x, s.y, Mathf.Atan2(s.y - I.cy, s.x - I.cx));
+                    int lv = ti == K.BLUE ? save.boat : Mathf.Clamp(save.boat + UnityEngine.Random.Range(-1, 2), 0, 10); // the enemy keeps up with your boats
+                    Squad bs = MakeSquad(ti, 7, 1, new Mul(1f + 0.1f * lv, 1, 1, 1), s.x, s.y, Mathf.Atan2(s.y - I.cy, s.x - I.cx)); bs.lvl = lv;
+                    foreach (Unit bu0 in bs.units) bu0.aim = bu0.face;
                     docks.Add(new Dock { x = s.x, y = s.y, lx = l.x, ly = l.y, team = ti });
                 }
             }
@@ -162,6 +164,21 @@ namespace WarOfBalls
             if (sq.order == Ord.Rout || sq.order == Ord.Boat || sq.T.boat) return;
             sq.order = Ord.Attack; sq.target = tsq; sq.path = null; foreach (Unit u in sq.units) u.rt = 0;
         }
+        // after a kill the squad looks for the next enemy nearby and keeps fighting instead of going idle
+        bool NextTarget(Squad sq)
+        {
+            if (sq.T.boat || !AnyAlive(sq)) return false;
+            Vector2 c = Cen(sq); Squad best = null; float bd = Mathf.Max(650f, sq.T.aggro * 2.5f);
+            foreach (Squad e in squads)
+            {
+                if (e.team == sq.team || e.T.boat || AliveNotInBoat(e) == 0) continue;
+                if (e.T.fly && (sq.T.proj == Proj.Shell || sq.T.proj == Proj.Grenade)) continue;
+                Vector2 ec = Cen(e); float d = sq.T.fly ? K.Dist(c.x, c.y, ec.x, ec.y) : Terra.RouteLen(c.x, c.y, ec.x, ec.y);
+                if (d < bd) { bd = d; best = e; }
+            }
+            if (best == null) return false;
+            OrderAttack(sq, best); return true;
+        }
         public void OrderHold(Squad sq)
         {
             if (sq.order == Ord.Rout || sq.order == Ord.Boat) return;
@@ -198,15 +215,48 @@ namespace WarOfBalls
             foreach (Unit u in list) { u.sq = q; u.target = null; }
             Vector2 c = Centroid(list); q.ax = c.x; q.ay = c.y; q.bx = c.x; q.by = c.y; Reslot(q); Reslot(sq); squads.Add(q); return q;
         }
+        // boat upgrades: more seats every level, a self-firing cannon from level 5, stronger cannon after that
+        public static int BoatCapFor(int lvl) { return K.BOATCAP + 6 * lvl; }
+        public static int BoatGunDmg(int lvl) { return lvl < 5 ? 0 : 30 + 10 * (lvl - 5); }
+        public static float BoatScale(int lvl) { return 1.1f + 0.08f * lvl; }
+        public int BoatCap(Squad b) { return BoatCapFor(b.lvl); }
+        const float BOATGUN_R = 290f;
+        Unit BoatGunTarget(Unit u)
+        {
+            Unit best = null; float bd = BOATGUN_R;
+            for (int i = 0; i < units.Count; i++)
+            {
+                Unit e = units[i]; if (e.dead || e.team == u.team || e.inBoat != null || e.T.fly) continue;
+                float d = K.Dist(e.x, e.y, u.x, u.y); if (e.T.boat) d *= 0.8f; if (d < bd) { bd = d; best = e; }
+            }
+            return best;
+        }
+        void BoatGun(Unit u, float dt)
+        {
+            u.rt -= dt;
+            if (u.target == null || u.target.dead || u.target.inBoat != null || u.rt <= 0 || K.Dist(u.target.x, u.target.y, u.x, u.y) > BOATGUN_R) { u.rt = 0.4f; u.target = BoatGunTarget(u); }
+            Unit t = u.target; if (t == null) return;
+            u.aim = Mathf.Atan2(t.y - u.y, t.x - u.x);
+            if (u.cool > 0) return;
+            float d = K.Dist(t.x, t.y, u.x, u.y), flight = d / 1050f;
+            shots.Add(new Shot
+            {
+                kind = Proj.Shell, x0 = u.x, y0 = u.y, h0 = MuzzleH(u) + 3, tx = t.x + t.vx * flight * 0.8f + Rnd(-14, 14), ty = t.y + t.vy * flight * 0.8f + Rnd(-14, 14), th = AimH(t), t = 0, T = flight,
+                src = u, tgt = t, dmg = BoatGunDmg(u.sq.lvl), splash = 30f
+            });
+            u.cool = 2.4f * Rnd(0.85f, 1.15f); u.draw = 1; Sfx("cannon", 90f);
+            float off = 12f * BoatScale(u.sq.lvl); Puff(u.x + Mathf.Cos(u.aim) * off, u.y + Mathf.Sin(u.aim) * off, MuzzleH(u) + 3, 0xffd070, true);
+        }
         public bool BoardBoat(Squad sq, Squad b)
         {
             List<Unit> L = Alive(sq); if (L.Count == 0 || b.cargo != null) return false;
             Unit bu = BoatOf(b); if (bu == null) return false;
-            if (L.Count > K.BOATCAP)
+            int cap = BoatCap(b);
+            if (L.Count > cap)
             {
                 float bx = bu.x, byy = bu.y;
                 L.Sort((a, c) => K.Dist(a.x, a.y, bx, byy).CompareTo(K.Dist(c.x, c.y, bx, byy)));
-                TakeUnits(sq, L.GetRange(K.BOATCAP, L.Count - K.BOATCAP));
+                TakeUnits(sq, L.GetRange(cap, L.Count - cap));
             }
             b.cargo = sq; sq.order = Ord.Boat; sq.path = null; sq.target = null;
             foreach (Unit u in Alive(sq)) { u.inBoat = b; u.vx = u.vy = 0; u.target = null; }
@@ -447,13 +497,15 @@ namespace WarOfBalls
             if (u.inBoat != null)
             {
                 Unit bu = BoatOf(u.inBoat); if (bu == null) { KillUnit(u); return; }
-                int i = 0, idx = 0; foreach (Unit v in sq.units) { if (v.dead) continue; if (v == u) { idx = i; break; } i++; }
-                int row = idx / 2, col = idx % 2; float fx = Mathf.Cos(bu.face), fy = Mathf.Sin(bu.face), along = 11f - row * 3.2f, lat = (col == 1 ? -1f : 1f) * 4.3f;
+                int i = 0, idx = 0, n = 0; foreach (Unit v in sq.units) { if (v.dead) continue; if (v == u) idx = i; i++; } n = Mathf.Max(1, i);
+                float bs = BoatScale(u.inBoat.lvl), Lh = 11f * bs, Wh = 4.6f * bs; int cols = n <= 16 ? 2 : n <= 36 ? 3 : n <= 60 ? 4 : 5, rows = Mathf.CeilToInt(n / (float)cols);
+                int row = idx / cols, col = idx % cols; float fx = Mathf.Cos(bu.face), fy = Mathf.Sin(bu.face);
+                float along = Lh - (row + 0.5f) * (2f * Lh / rows), lat = -Wh + (col + 0.5f) * (2f * Wh / cols);
                 u.x = bu.x + fx * along - fy * lat; u.y = bu.y + fy * along + fx * lat; u.face = bu.face; u.vx = bu.vx; u.vy = bu.vy; u.spd = 0; return;
             }
             if (u.burn > 0) { u.burn -= dt; u.hp -= 5 * dt; if (u.hp <= 0) { KillUnit(u); return; } }
             bool hasG = false, stop = false, hasFace = false; float gx = 0, gy = 0, faceT = 0, spMul = 1f;
-            if (T.boat) { Vector2 p = SlotPos(u); gx = p.x; gy = p.y; hasG = true; }
+            if (T.boat) { Vector2 p = SlotPos(u); gx = p.x; gy = p.y; hasG = true; if (sq.lvl >= 5) BoatGun(u, dt); }
             else
             {
                 u.rt -= dt;
@@ -600,10 +652,10 @@ namespace WarOfBalls
                 {
                     foreach (Unit u in sq.after.units) if (!u.dead && K.Dist(u.x, u.y, c.x, c.y) < sq.T.range + 40) { OrderAttack(sq, sq.after); return; }
                 }
-                if (sq.pi >= sq.path.Count && lag < (Units.SOLO(sq.ti) ? 30 : 16)) { if (sq.after != null && AnyAlive(sq.after)) OrderAttack(sq, sq.after); else { sq.order = Ord.Hold; sq.path = null; } }
-                if (sq.order == Ord.Path && sq.path != null && sq.pi >= sq.path.Count) { sq.stuck += dt; if (sq.stuck > 2) { if (sq.after != null && AnyAlive(sq.after)) OrderAttack(sq, sq.after); else { sq.order = Ord.Hold; sq.path = null; } } }
+                if (sq.pi >= sq.path.Count && lag < (Units.SOLO(sq.ti) ? 30 : 16)) { if (sq.after != null && AnyAlive(sq.after)) OrderAttack(sq, sq.after); else if (sq.after != null && sq.team == K.BLUE && NextTarget(sq)) { } else { sq.order = Ord.Hold; sq.path = null; } }
+                if (sq.order == Ord.Path && sq.path != null && sq.pi >= sq.path.Count) { sq.stuck += dt; if (sq.stuck > 2) { if (sq.after != null && AnyAlive(sq.after)) OrderAttack(sq, sq.after); else if (sq.after != null && sq.team == K.BLUE && NextTarget(sq)) { } else { sq.order = Ord.Hold; sq.path = null; } } }
             }
-            else if (sq.order == Ord.Attack) { if (sq.target == null || AliveNotInBoat(sq.target) == 0) OrderHold(sq); }
+            else if (sq.order == Ord.Attack) { if (sq.target == null || AliveNotInBoat(sq.target) == 0) { if (!(sq.team == K.BLUE && NextTarget(sq))) OrderHold(sq); } }
             if (sq.T.boat && sq.order == Ord.Hold && sq.hasLandAt && sq.cargo != null && NearShore(sq)) { Vector2 g = sq.landAt; sq.hasLandAt = false; UnloadBoat(sq, true, g); }
         }
 

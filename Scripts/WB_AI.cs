@@ -248,7 +248,7 @@ namespace WarOfBalls
                     if (!Units.VEH(s.ti) && ahead > 220 && !Engaged(s)) { if (s.order != Ord.Hold) OrderHold(s); busy.Add(s); continue; }
                     if (s.ti == 1)
                     {
-                        Vector2 p = Terra.Side(F.x, F.y) == Terra.Side(c.x, c.y) ? new Vector2(F.x + 170, F.y + (s.id % 2 == 1 ? -90 : 90)) : new Vector2(K.BXA - 90, K.BY + (s.id % 2 == 1 ? -70 : 70));
+                        Vector2 p = Terra.Side(F.x, F.y) == Terra.Side(c.x, c.y) ? new Vector2(F.x + 170, F.y + (s.id % 2 == 1 ? -90 : 90)) : new Vector2(K.BXA - 90, K.BYS[s.id % 2]);
                         Vector2 sl = Terra.SnapLand(p); goTo(s, sl.x, sl.y, 60); continue;
                     }
                     goTo(s, F.x + Jit(s, 15), F.y + ((i % 5) - 2) * 24, 40);
@@ -301,7 +301,7 @@ namespace WarOfBalls
                         else attack(s, th.t);
                     }
                 }
-                Vector2[] posts = { new Vector2(K.BXB + 150, K.BY - 80), new Vector2(K.BXB + 150, K.BY + 80), new Vector2(K.BXB + 240, K.BY), new Vector2(F.x - 90, F.y - 60), new Vector2(F.x - 90, F.y + 60), new Vector2(F.x - 160, F.y) };
+                Vector2[] posts = { new Vector2(K.BXB + 150, K.BYS[0]), new Vector2(K.BXB + 150, K.BYS[1]), new Vector2(K.BXB + 300, K.BY), new Vector2(F.x - 90, F.y - 60), new Vector2(F.x - 90, F.y + 60), new Vector2(F.x - 160, F.y) };
                 int pi = 0;
                 foreach (Squad s in free)
                 {
@@ -314,8 +314,8 @@ namespace WarOfBalls
                     // nothing to do: hold a post — snipers and armour cover the bridge, the reserve sits on the flag
                     Vector2 post;
                     if (s == reserve) post = new Vector2(F.x - 50, F.y);
-                    else if (s.ti == 1) post = new Vector2(K.BXB + 190, K.BY + (s.id % 2 == 1 ? -150 : 150));
-                    else if (Units.VEH(s.ti)) post = new Vector2(K.BXB + 130, K.BY + (s.id % 2 == 1 ? -40 : 40));
+                    else if (s.ti == 1) post = new Vector2(K.BXB + 200, K.BYS[s.id % 2] + (s.id % 4 < 2 ? -70 : 70));
+                    else if (Units.VEH(s.ti)) post = new Vector2(K.BXB + 130, K.BYS[s.id % 2]);
                     else { if (!s.hasPost) { Vector2 pp = posts[(pi++) % posts.Length]; s.post = new Vector2(pp.x + Rnd(-20, 20), pp.y + Rnd(-20, 20)); s.hasPost = true; } post = s.post; }
                     // low armour falls back to the flag
                     if (Units.VEH(s.ti)) { Unit u = BoatOf(s); if (u != null && u.hp < u.maxhp * 0.25f) post = new Vector2(F.x - 120, F.y + (s.id % 2 == 1 ? -70 : 70)); }

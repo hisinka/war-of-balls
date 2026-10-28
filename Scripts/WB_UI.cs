@@ -221,14 +221,13 @@ namespace WarOfBalls
             }
             else if (phase == Phase.Battle || phase == Phase.End)
             {
-                List<int> btns = new List<int> { 0, 1 }; if (save.fire > 0) btns.Add(2); if (save.cry > 0) btns.Add(3);
+                List<int> btns = new List<int> { 1 }; if (save.fire > 0) btns.Add(2); if (save.cry > 0) btns.Add(3);
                 float total = 0; foreach (int b in btns) total += (b < 2 ? Mathf.Min(170, (VW - 40) / btns.Count) : 96) + 8; total -= 8;
                 float bx = VW / 2 - total / 2;
                 foreach (int b in btns)
                 {
                     float w = b < 2 ? Mathf.Min(170, (VW - 40) / btns.Count) : 96;
                     Rect r = new Rect(bx, by, w, bh);
-                    if (b == 0 && Btn(r, "Атака", BK.Red, "все отряды")) AllAttack();
                     if (b == 1 && Btn(r, "Стоять", BK.Dark, "все отряды")) { foreach (Squad q in squads) if (q.team == K.BLUE) OrderHold(q); }
                     if (b == 2) { if (Btn(r, "", BK.Ability, "Обстрел (Q)", abFire <= 0, Tex.bomb)) FireVolley(); if (abFire > 0) Img(new Rect(r.x + 2, r.yMax - 2 - (r.height - 4) * abFire / 30f, r.width - 4, (r.height - 4) * abFire / 30f), Tex.white, new Color(0, 0, 0, 0.55f)); }
                     if (b == 3) { if (Btn(r, "", BK.Ability, "Приказ (E)", abCry <= 0, Tex.horn)) WarCry(); if (abCry > 0) Img(new Rect(r.x + 2, r.yMax - 2 - (r.height - 4) * abCry / 45f, r.width - 4, (r.height - 4) * abCry / 45f), Tex.white, new Color(0, 0, 0, 0.55f)); }
@@ -700,7 +699,7 @@ namespace WarOfBalls
         {
             if (pend != null && pend.rot)
             {
-                camT.yaw += (m.x - pend.lx) * 0.006f; if (camMode3d) camT.pitch = K.Clamp(camT.pitch + (m.y - pend.ly) * 0.004f, 0.62f, 1.35f);
+                camT.yaw += (m.x - pend.lx) * 0.006f; if (camMode3d) camT.pitch = K.Clamp(camT.pitch + (m.y - pend.ly) * 0.004f, PMIN, PMAX);
                 pend.lx = m.x; pend.ly = m.y; CamSync(); return;
             }
             if (pend != null)
@@ -776,12 +775,13 @@ namespace WarOfBalls
         {
             SHOP = new List<ShopItem> {
                 new ShopItem{ id="dragon", ti=6, name="Апач", desc=n=>Armies.DragonOwned(save)?"Уровень "+(n+1)+" · броня +15%, ракеты и пулемёт +12% за уровень":"Ударный вертолёт — бесплатно с "+K.DRAGON_LVL+"-й битвы", cost=n=>6+3*n, max=10, locked=()=>!Armies.DragonOwned(save) },
-                new ShopItem{ id="sword_n", ti=0, name="+2 автоматчика", desc=n=>"В отряде: "+(10+2*n), cost=n=>3+Mathf.FloorToInt(n*0.6f), max=35 },
-                new ShopItem{ id="arch_n", ti=1, name="+2 снайпера", desc=n=>"В отряде: "+(6+2*n), cost=n=>4+Mathf.FloorToInt(n*0.6f), max=25 },
+                new ShopItem{ id="sword_n", ti=0, name="+2 автоматчика", desc=n=>"В отряде: "+(10+2*n)+" / 200", cost=n=>3+Mathf.FloorToInt(n*0.25f), max=95 },
+                new ShopItem{ id="arch_n", ti=1, name="+2 снайпера", desc=n=>"В отряде: "+(6+2*n)+" / 200", cost=n=>4+Mathf.FloorToInt(n*0.25f), max=97 },
+                new ShopItem{ id="boat", ti=7, name="Лодки", desc=n=>"Ур. "+n+"/10 · мест: "+WarGame.BoatCapFor(n)+(n>=5?" · пушка: урон "+WarGame.BoatGunDmg(n):" · с 5 ур. — пушка"), cost=n=>4+2*n, max=10 },
                 new ShopItem{ id="spear", ti=3, name="Гранатомётчики", desc=n=>n>0?"Нанято! 4 бойца с гранатами":"4 бойца: гранаты по площади, бьют технику", cost=n=>8, max=1 },
-                new ShopItem{ id="spear_n", ti=3, name="+1 гранатомётчик", desc=n=>save.spear>0?"В отряде: "+(4+n):"Сначала найми гранатомётчиков", cost=n=>3+Mathf.FloorToInt(n*0.7f), max=20, need="spear" },
+                new ShopItem{ id="spear_n", ti=3, name="+2 гранатомётчика", desc=n=>save.spear>0?"В отряде: "+(4+2*n)+" / 200":"Сначала найми гранатомётчиков", cost=n=>3+Mathf.FloorToInt(n*0.25f), max=98, need="spear" },
                 new ShopItem{ id="shield", ti=5, name="Спецназ", desc=n=>n>0?"Нанят! Только когда ты защитник":"Щиты, броня, пистолеты — выдаётся только защитнику", cost=n=>8, max=1 },
-                new ShopItem{ id="shield_n", ti=5, name="+2 спецназовца", desc=n=>save.shield>0?"В отряде: "+(8+2*n):"Сначала найми спецназ", cost=n=>3+Mathf.FloorToInt(n*0.6f), max=35, need="shield" },
+                new ShopItem{ id="shield_n", ti=5, name="+2 спецназовца", desc=n=>save.shield>0?"В отряде: "+(8+2*n)+" / 200":"Сначала найми спецназ", cost=n=>3+Mathf.FloorToInt(n*0.25f), max=96, need="shield" },
                 new ShopItem{ id="fire", sym=0, name="Артобстрел", desc=n=>n>0?"Изучено — кнопка в бою (Q)":"7 снарядов по самому большому скоплению врагов", cost=n=>6, max=1 },
                 new ShopItem{ id="cry", sym=1, name="Приказ", desc=n=>n>0?"Изучено — кнопка в бою (E)":"+35 духа и +25% урона всем на 8 секунд", cost=n=>6, max=1 },
                 new ShopItem{ id="sword_p", ti=0, name="Бронебойные патроны", desc=n=>"Автоматчики: урон +12%, здоровье +8% · ур. "+n+"/5", cost=n=>4+2*n, max=5 },
@@ -803,7 +803,7 @@ namespace WarOfBalls
             if (screen == Screen_.Menu)
             {
                 Blue_ForMenu(out Army a);
-                string intro = "Два острова, один мост и океан. Каждый бой — жребий: ты <b>защищаешь</b> флаг 2,5 минуты или <b>штурмуешь</b> вражеский. Автоматчики, снайперы, танк, БТР, лодки и Апач.";
+                string intro = "Два острова, два моста и океан. Каждый бой — жребий: ты <b>защищаешь</b> флаг 2,5 минуты или <b>штурмуешь</b> вражеский. Автоматчики, снайперы, танк, БТР, лодки и Апач.";
                 float w = Mathf.Min(440, VW - 32) - 40; GUIStyle ps = S(14, false, TextAnchor.UpperCenter, true);
                 float ih = small ? 0 : ps.CalcHeight(new GUIContent(intro), w);
                 string next = "Следующая битва: <b>" + save.level + ". " + Units.BattleName(save.level) + "</b>" + (Units.HasGeneral(save.level) ? " · командир" : "") + (Units.RedDragon(save.level) ? " · вражеский Апач" : "") + "\nРоль решит жребий: защита или штурм" + (!Armies.DragonOwned(save) ? " · свой Апач — с " + K.DRAGON_LVL + "-й битвы" : "");
@@ -836,8 +836,8 @@ namespace WarOfBalls
             {
                 string[] items = {
                     "<b>Жребий:</b> в начале боя ты становишься <b>защитником</b> (не отдай свой флаг 2,5 минуты) или <b>нападающим</b> (захвати флаг врага за 2,5 минуты). Таймер — вверху.",
-                    "<b>Острова:</b> на остров врага можно попасть только <b>по мосту</b> или <b>на лодке</b>. У каждой стороны по 3 лодки у причалов.",
-                    "<b>Лодки:</b> подведи пехоту к лодке — появится кнопка <b>«Сесть в лодку»</b>. Потом выбери лодку и нажми, куда плыть: на воду — поплывёт туда, на берег — причалит и высадит десант. Техника в лодку не помещается. Лодку можно потопить вместе с десантом!",
+                    "<b>Острова:</b> на остров врага можно попасть только <b>по одному из двух мостов</b> или <b>на лодке</b>. У каждой стороны по 3 лодки у причалов.",
+                    "<b>Лодки:</b> подведи пехоту к лодке — появится кнопка <b>«Сесть в лодку»</b>. В казарме лодки качаются до 10 уровня: больше мест, а с 5-го — своя пушка. Потом выбери лодку и нажми, куда плыть: на воду — поплывёт туда, на берег — причалит и высадит десант. Техника в лодку не помещается. Лодку можно потопить вместе с десантом!",
                     "<b>Захват:</b> встань в круг у флага. Пока у защитников есть живые бойцы — 40 секунд, если все погибли — 5 секунд. Погибла вся твоя армия — поражение. Штурм отбит до последнего бойца — победа защитника.",
                     "<b>Войска:</b> автоматчики (стреляют на ходу), снайперы (далеко и больно), гранатомётчики (урон по площади, хороши против техники), <b>БТР</b> (быстрый, пулемёт), <b>танк</b> (пушка, броня), <b>спецназ</b> со щитами и бронёй — <b>только у защитника</b>, и <b>Апач</b> — с 5-й битвы.",
                     "<b>Управление:</b> тяни знамя отряда — рисуй путь; тяни на врага — атака. Выбери отряд и нажми правой кнопкой — бежит туда / атакует. Нажми знамя — меню: разделить, объединить, в лодку, «Стена» у спецназа, «К флагу», «Следить».",

@@ -211,7 +211,7 @@ namespace WarOfBalls
                         if (Mathf.Abs(dx) > 1.7f || Mathf.Abs(dy) > 1.7f) continue;
                         float d = Mathf.Sqrt(dx * dx + dy * dy), ta = Mathf.Atan2(dy, dx), fi = (ta + Mathf.PI) / (2 * Mathf.PI) * NT; int ii = Mathf.Clamp((int)fi, 0, NT - 1);
                         float n = Mathf.Lerp(ntab[k][ii], ntab[k][ii + 1], fi - ii);
-                        if (Mathf.Abs(y - K.BY) < 150f && (I.cx < K.W / 2f ? x > I.cx : x < I.cx)) n = Mathf.Max(n, 1.04f);
+                        if (Terra.BridgeGap(y) < 150f && (I.cx < K.W / 2f ? x > I.cx : x < I.cx)) n = Mathf.Max(n, 1.07f);
                         if (Mathf.Abs(y - K.BY) < 300f && (I.cx < K.W / 2f ? x < I.cx : x > I.cx)) n = Mathf.Max(n, 1.0f);
                         q = Mathf.Min(q, d / n);
                     }
@@ -245,9 +245,7 @@ namespace WarOfBalls
                             col *= 0.93f + g * 0.14f;
                             if (g > 0.996f) col = Color.Lerp(col, fl[(i + j) % 5], 0.8f);
                             // roads from each flag to the bridge
-                            float rd = 1e9f;
-                            if (x >= K.FLX && x <= K.BXA + 40) rd = Mathf.Abs(y - K.BY); else if (x < K.FLX) rd = K.Dist(x, y, K.FLX, K.BY); else if (x <= K.BXA + 60) rd = K.Dist(x, y, K.BXA + 40, K.BY);
-                            if (x >= K.BXB - 40 && x <= K.W - K.FLX) rd = Mathf.Min(rd, Mathf.Abs(y - K.BY)); else if (x > K.W - K.FLX) rd = Mathf.Min(rd, K.Dist(x, y, K.W - K.FLX, K.BY));
+                            float rd = Terra.RoadDist(x, y);
                             if (rd < 19f) col = Color.Lerp(col, road * (0.92f + g * 0.1f), 0.7f * Mathf.Clamp01((19f - rd) / 3f));
                             foreach (Forest f in Terra.forests) { float d = K.Dist(x, y, f.x, f.y); if (d < f.r + 10) { float k = d / (f.r + 10); col = Color.Lerp(col, forestC, k < 0.85f ? Mathf.Lerp(0.7f, 0.5f, k / 0.85f) : 0.5f * (1f - (k - 0.85f) / 0.15f)); } }
                             foreach (Hill h in Terra.hills)
@@ -409,13 +407,15 @@ namespace WarOfBalls
             sb.Build(terrainRoot, "Piers", true);
         }
 
-        // ---------- the bridge (fixed, built once) ----------
+        // ---------- the two bridges (fixed, built once) ----------
         void BuildBridge()
         {
             SceneBuilder sb = new SceneBuilder(); float L = K.BXB - K.BXA, cx = (K.BXA + K.BXB) / 2;
             Action<Geo, int, float, float, float, float, float, float> add = (g, c, x, h, y, rx, ry, rz) => sb.Add(g, K.C(c), Matrix4x4.TRS(K.U(x, y, h), Quaternion.Euler(rx * Mathf.Rad2Deg, ry * Mathf.Rad2Deg, rz * Mathf.Rad2Deg), Vector3.one));
             const int ASP = 0x575c63, CON = 0xb9b4a8, RAIL = 0xd8d2c4, DARK = 0x3a3f45, YEL = 0xf2d24a, WHT = 0xeeeeee;
-            float BW = K.BW, BY = K.BY, DECK = K.DECK;
+            float BW = K.BW, DECK = K.DECK;
+            foreach (float BY in K.BYS)
+            {
             add(Geo.Box(L - 100, 3, BW * 2), ASP, cx, DECK - 1.5f, BY, 0, 0, 0);
             add(Geo.Box(52, 3, BW * 2), ASP, K.BXA + 25, 3.6f, BY, 0, 0, 0.118f);
             add(Geo.Box(52, 3, BW * 2), ASP, K.BXB - 25, 3.6f, BY, 0, 0, -0.118f);
@@ -435,9 +435,10 @@ namespace WarOfBalls
             for (float x = K.BXA + 90; x < K.BXB - 60; x += 90) { foreach (int s in new[] { -1, 1 }) add(pil, CON, x, DECK - 18, BY + s * (BW - 12), 0, 0, 0); add(cap, CON, x, DECK - 4.5f, BY, 0, 0, 0); }
             Geo pole = Geo.Cyl(0.6f, 0.7f, 20, 6), arm = Geo.Box(6, 0.6f, 0.8f);
             for (float x = K.BXA + 80; x < K.BXB - 60; x += 120) foreach (int s in new[] { -1, 1 }) { add(pole, DARK, x, DECK + 10, BY + s * (BW - 2), 0, 0, 0); add(arm, DARK, x, DECK + 20, BY + s * (BW - 5), 0, Mathf.PI / 2, 0); }
+            }
             sb.Build(worldRoot, "Bridge", true);
             Geo bulb = Geo.Sphere(1.7f, 8, 6);
-            for (float x = K.BXA + 80; x < K.BXB - 60; x += 120) foreach (int s in new[] { -1, 1 }) sb.Add(bulb, K.C(0xfff2b0), Matrix4x4.Translate(K.U(x, BY + s * (BW - 8), DECK + 19.5f)), 0, true);
+            foreach (float BY in K.BYS) for (float x = K.BXA + 80; x < K.BXB - 60; x += 120) foreach (int s in new[] { -1, 1 }) sb.Add(bulb, K.C(0xfff2b0), Matrix4x4.Translate(K.U(x, BY + s * (BW - 8), DECK + 19.5f)), 0, true);
             sb.Build(worldRoot, "BridgeLamps", false);
         }
 

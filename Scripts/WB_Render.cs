@@ -16,7 +16,7 @@ namespace WarOfBalls
     {
         // ================= camera: like a map app — pan, zoom, rotate, 2D/3D =================
         public class CamState { public float x, y, dist, yaw, pitch; }
-        public const float P3D = 0.92f, P2D = 1.5f, DMIN = 160f, DMAX = 4600f;
+        public const float P3D = 0.92f, P2D = 1.5f, PMIN = 0.1f, PMAX = 1.5f, DMIN = 160f, DMAX = 4600f;
         public CamState cam = new CamState { x = K.W * 0.3f, y = K.H / 2, dist = 1200, yaw = 0, pitch = P3D };
         public CamState camT = new CamState { x = K.W * 0.3f, y = K.H / 2, dist = 1200, yaw = 0, pitch = P3D };
         public bool camMode3d = true, camInit;
@@ -29,7 +29,11 @@ namespace WarOfBalls
             float fx = -Mathf.Sin(c.yaw), fy = -Mathf.Cos(c.yaw), cp = Mathf.Cos(c.pitch), sp = Mathf.Sin(c.pitch);
             Vector3 dir = new Vector3(fx * cp, -sp, -fy * cp).normalized;
             lookPt = K.U(c.x, c.y, Terra.Height(c.x, c.y) * 0.6f);
-            cam3.transform.position = lookPt - dir * c.dist; cam3.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
+            Vector3 pos = lookPt - dir * c.dist;
+            // never let the camera dip under the ground or the sea: 360° orbit, but no looking from below the map
+            float gx = pos.x + K.W / 2, gy = K.H / 2 - pos.z, minH = Mathf.Max(Terra.Height(K.Clamp(gx, K.WX0 - 3000, K.WX1 + 3000), K.Clamp(gy, K.WY0 - 3000, K.WY1 + 3000)), K.SEA) + 30;
+            if (pos.y < minH) { pos.y = minH; dir = (lookPt - pos).normalized; }
+            cam3.transform.position = pos; cam3.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
         }
         public void CamSync() { cam.x = camT.x; cam.y = camT.y; cam.dist = camT.dist; cam.yaw = camT.yaw; cam.pitch = camT.pitch; PlaceCam(cam); }
         void CamFit(float x0, float y0, float x1, float y1, bool inst)
@@ -92,7 +96,7 @@ namespace WarOfBalls
         public Vector2 Pick(float sx, float sy)
         {
             Ray r = cam3.ScreenPointToRay(new Vector3(sx * us, Screen.height - sy * us, 0));
-            if (r.direction.y > -1e-4f) return new Vector2(K.W / 2, K.H / 2);
+            if (r.direction.y > -0.03f) { Vector3 d = r.direction; d.y = -0.03f; r = new Ray(r.origin, d.normalized); }
             float h = 0; Vector3 hit = r.origin;
             for (int it = 0; it < 6; it++)
             {
@@ -100,7 +104,7 @@ namespace WarOfBalls
                 float gx = K.Clamp(hit.x + K.W / 2, K.WX0 - 2000, K.WX1 + 2000), gy = K.Clamp(K.H / 2 - hit.z, K.WY0 - 2000, K.WY1 + 2000);
                 h = Terra.Height(gx, gy);
             }
-            return new Vector2(hit.x + K.W / 2, K.H / 2 - hit.z);
+            return new Vector2(K.Clamp(hit.x + K.W / 2, K.WX0 - 400, K.WX1 + 400), K.Clamp(K.H / 2 - hit.z, K.WY0 - 400, K.WY1 + 400));
         }
         // world -> screen (GUI units); b = behind the camera
         public struct SP { public float x, y; public bool b; }
@@ -160,7 +164,7 @@ namespace WarOfBalls
             foreach (Unit u in units)
             {
                 if (Units.RIG(u.ti)) continue;
-                bool pass = u.inBoat != null; float r = u.T.r * VS * (pass ? 0.72f : 1f), h = pass ? K.SEA + 3.5f : Terra.Height(u.x, u.y);
+                bool pass = u.inBoat != null; float r = u.T.r * VS * (pass ? 0.72f - 0.022f * u.inBoat.lvl : 1f), h = pass ? K.SEA + 3.5f : Terra.Height(u.x, u.y);
                 float bob = pass ? 0 : Mathf.Abs(Mathf.Sin(u.walk)) * (u.spd > 5 ? r * 0.18f : 0) + r * 0.12f;
                 Matrix4x4 MU = Matrix4x4.TRS(K.U(u.x, u.y, h), K.Face(u.face), Vector3.one);
                 Color bodyC = Units.BODY[u.team]; if (u.flash > 0) bodyC = Color.Lerp(bodyC, Color.white, Mathf.Round(u.flash * 4) / 4 * 0.8f);
@@ -216,7 +220,7 @@ namespace WarOfBalls
             if (sel != null && AnyAlive(sel))
                 foreach (Unit u in sel.units)
                 {
-                    if (u.dead || u.inBoat != null) continue; float rr = u.T.r * (Units.RIG(u.ti) ? 1.5f : 1.4f);
+                    if (u.dead || u.inBoat != null) continue; float rr = u.T.r * (Units.RIG(u.ti) ? 1.5f : 1.4f) * (u.T.boat ? BoatScale(u.sq.lvl) : 1f);
                     fx.AddGeo(gRing, Matrix4x4.TRS(K.U(u.x, u.y, (u.T.boat ? K.SEA + 0.9f : Terra.Height(u.x, u.y)) + 0.6f), Quaternion.identity, Vector3.one * rr), new Color(1f, 0.85f, 0.29f, 0.9f));
                 }
             foreach (RingFx g in rings)
@@ -305,7 +309,18 @@ namespace WarOfBalls
                   .Add(Geo.Box(29, 1, 13.4f), stripe, Geo.M(-1, 3.8f, 0)).Add(Geo.Box(24, 0.5f, 10.4f), wood, Geo.M(-2, 3.4f, 0));
                 foreach (float x in new[] { -8f, 0f, 7f }) bm.Add(Geo.Box(1.5f, 1.2f, 11), wood, Geo.M(x, 4.2f, 0));
                 bm.Add(Geo.Box(4, 6, 4), dark, Geo.M(-16, 5, 0)).Add(Geo.Cyl(0.5f, 0.5f, 5, 6), dark, Geo.M(-17.5f, 0.5f, 0));
+                int lv = u.sq != null ? u.sq.lvl : 0;
+                if (lv >= 5) bm.Add(Geo.Cyl(4.2f, 4.6f, 1.6f, 12), dark, Geo.M(12, 4.6f, 0)); // gun mount on the bow
                 part(g.transform, "Boat", bm);
+                if (lv >= 5)
+                {
+                    Color gun = Paint(team, 0x4d5560, 0.25f);
+                    Transform tur = new GameObject("Gun").transform; tur.SetParent(g.transform, false); tur.localPosition = new Vector3(12, 7.4f, 0);
+                    part(tur, "GunShield", new ColorModel().Add(Geo.Box(5.5f, 3.6f, 5.5f), gun, Matrix4x4.identity, 0.3f).Add(Geo.Box(1.2f, 3.2f, 6.4f), gun, Geo.M(2.8f, 0.4f, 0), 0.3f));
+                    R.barrel = part(tur, "Barrel", new ColorModel().Add(Geo.Cyl(0.6f, 0.75f, 10 + lv, 8), dark, Geo.M(0, 0, 0, 0, 0, Mathf.PI / 2)));
+                    R.bx0 = 4 + (10 + lv) / 2f; R.barrel.localPosition = new Vector3(R.bx0, 0.6f, 0); R.tur = tur;
+                }
+                g.transform.localScale = Vector3.one * BoatScale(lv); // upgraded boats are bigger
             }
             // own material instances so a wreck can darken without touching other units
             foreach (MeshRenderer mr in g.GetComponentsInChildren<MeshRenderer>())

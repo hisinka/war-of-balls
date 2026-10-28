@@ -11,8 +11,9 @@ namespace WarOfBalls
         public const float W = 3500f, H = 1700f, MG = 1500f;
         public const float WX0 = -MG + 80f, WX1 = W + MG - 80f, WY0 = -MG + 80f, WY1 = H + MG - 80f;
         public const float FLAG_R = 66f, FLX = 330f, ZX0 = 300f, ZX1 = 980f, ZY0 = H / 2f - 420f, ZY1 = H / 2f + 420f, TIMER = 150f;
-        public const int DRAGON_LVL = 5, BOATCAP = 16;
-        public const float BY = H / 2f, BW = 62f, BXA = 1140f, BXB = W - 1140f, LANDH = 4f, DECK = 8f, SEA = 1.2f;
+        public const int DRAGON_LVL = 5, BOATCAP = 24;
+        public const float BY = H / 2f, BOFF = 260f, BW = 62f, BXA = 1140f, BXB = W - 1140f, LANDH = 4f, DECK = 8f, SEA = 1.2f;
+        public static readonly float[] BYS = { BY - BOFF, BY + BOFF }; // two bridges, north and south
         public const int BLUE = 0, RED = 1;
         public const float PI = Mathf.PI;
 
@@ -87,6 +88,7 @@ namespace WarOfBalls
         public List<Vector2> path;
         public List<Unit> units = new List<Unit>();
         public List<Vector2> offs = new List<Vector2>();
+        public int lvl; // boats: upgrade level 0..10
         public bool wall, run, hasLandAt, hasPost;
         public Vector2 landAt, post;
         public BoatPlan boatPlan;
@@ -155,7 +157,7 @@ namespace WarOfBalls
     {
         public int level = 1, pts = 0;
         public int[] stars = new int[400];
-        public int sword_n, arch_n, cav_n, spear_n, sword_p, arch_p, cav_p, spear_p, morale, spear, fire, cry, shield, shield_n, shield_p, dragon;
+        public int sword_n, arch_n, cav_n, spear_n, sword_p, arch_p, cav_p, spear_p, morale, spear, fire, cry, shield, shield_n, shield_p, dragon, boat;
         public bool soundOff;
 
         public int Up(string id)
@@ -165,7 +167,7 @@ namespace WarOfBalls
                 case "sword_n": return sword_n; case "arch_n": return arch_n; case "cav_n": return cav_n; case "spear_n": return spear_n;
                 case "sword_p": return sword_p; case "arch_p": return arch_p; case "cav_p": return cav_p; case "spear_p": return spear_p;
                 case "morale": return morale; case "spear": return spear; case "fire": return fire; case "cry": return cry;
-                case "shield": return shield; case "shield_n": return shield_n; case "shield_p": return shield_p; case "dragon": return dragon;
+                case "shield": return shield; case "shield_n": return shield_n; case "shield_p": return shield_p; case "dragon": return dragon; case "boat": return boat;
             }
             return 0;
         }
@@ -176,7 +178,7 @@ namespace WarOfBalls
                 case "sword_n": sword_n++; break; case "arch_n": arch_n++; break; case "cav_n": cav_n++; break; case "spear_n": spear_n++; break;
                 case "sword_p": sword_p++; break; case "arch_p": arch_p++; break; case "cav_p": cav_p++; break; case "spear_p": spear_p++; break;
                 case "morale": morale++; break; case "spear": spear++; break; case "fire": fire++; break; case "cry": cry++; break;
-                case "shield": shield++; break; case "shield_n": shield_n++; break; case "shield_p": shield_p++; break; case "dragon": dragon++; break;
+                case "shield": shield++; break; case "shield_n": shield_n++; break; case "shield_p": shield_p++; break; case "dragon": dragon++; break; case "boat": boat++; break;
             }
         }
         public int Stars(int lvl) { return lvl >= 0 && lvl < stars.Length ? stars[lvl] : 0; }
@@ -212,7 +214,7 @@ namespace WarOfBalls
         {
             Army a = new Army();
             float mor = 1f + 0.15f * s.morale;
-            int[] c = { 10 + 2 * s.sword_n, 6 + 2 * s.arch_n, 1, s.spear > 0 ? 4 + s.spear_n : 0, 0, (roleDef && s.shield > 0) ? 8 + 2 * s.shield_n : 0, DragonOwned(s) ? 1 : 0, 0, 1 };
+            int[] c = { Mathf.Min(200, 10 + 2 * s.sword_n), Mathf.Min(200, 6 + 2 * s.arch_n), 1, s.spear > 0 ? Mathf.Min(200, 4 + 2 * s.spear_n) : 0, 0, (roleDef && s.shield > 0) ? Mathf.Min(200, 8 + 2 * s.shield_n) : 0, DragonOwned(s) ? 1 : 0, 0, 1 };
             a.counts = c;
             a.mul = new Mul[] {
                 new Mul(1 + 0.08f * s.sword_p, 1 + 0.12f * s.sword_p, 1, mor),
@@ -277,7 +279,7 @@ namespace WarOfBalls
         {
             float dx = (x - I.cx) / I.rx, dy = (y - I.cy) / I.ry, d = Mathf.Sqrt(dx * dx + dy * dy), th = Mathf.Atan2(dy, dx);
             float n = 1f + 0.075f * Mathf.Sin(3f * th + I.s) + 0.05f * Mathf.Sin(5f * th + 2.1f * I.s) + 0.025f * Mathf.Sin(11f * th + 0.7f * I.s);
-            if (Mathf.Abs(y - K.BY) < 150f && (I.cx < K.W / 2f ? x > I.cx : x < I.cx)) n = Mathf.Max(n, 1.04f); // solid shore where the bridge lands
+            if (BridgeGap(y) < 150f && (I.cx < K.W / 2f ? x > I.cx : x < I.cx)) n = Mathf.Max(n, 1.07f); // solid shore where the bridges land
             if (Mathf.Abs(y - K.BY) < 300f && (I.cx < K.W / 2f ? x < I.cx : x > I.cx)) n = Mathf.Max(n, 1.0f);
             return d / n;
         }
@@ -286,12 +288,32 @@ namespace WarOfBalls
         {
             float n = 1f + 0.075f * Mathf.Sin(3f * th + I.s) + 0.05f * Mathf.Sin(5f * th + 2.1f * I.s) + 0.025f * Mathf.Sin(11f * th + 0.7f * I.s);
             float x = I.cx + Mathf.Cos(th) * I.rx * q * n, y = I.cy + Mathf.Sin(th) * I.ry * q * n;
-            if (Mathf.Abs(y - K.BY) < 150f && (I.cx < K.W / 2f ? x > I.cx : x < I.cx)) n = Mathf.Max(n, 1.04f);
+            if (BridgeGap(y) < 150f && (I.cx < K.W / 2f ? x > I.cx : x < I.cx)) n = Mathf.Max(n, 1.07f);
             if (Mathf.Abs(y - K.BY) < 300f && (I.cx < K.W / 2f ? x < I.cx : x > I.cx)) n = Mathf.Max(n, 1.0f);
             return n;
         }
         public static float LandQ(float x, float y) { return Mathf.Min(IslandQ(ISL[0], x, y), IslandQ(ISL[1], x, y)); }
-        public static bool OnBridge(float x, float y) { return x >= K.BXA && x <= K.BXB && Mathf.Abs(y - K.BY) <= K.BW; }
+        public static int BridgeIdx(float y) { return Mathf.Abs(y - K.BYS[0]) <= Mathf.Abs(y - K.BYS[1]) ? 0 : 1; }
+        public static float BridgeGap(float y) { return Mathf.Min(Mathf.Abs(y - K.BYS[0]), Mathf.Abs(y - K.BYS[1])); }
+        public static bool OnBridge(float x, float y) { return x >= K.BXA && x <= K.BXB && BridgeGap(y) <= K.BW; }
+        static float SegDist(float px, float py, float ax, float ay, float bx, float by)
+        {
+            float dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy, t = l2 > 0 ? K.Clamp(((px - ax) * dx + (py - ay) * dy) / l2, 0, 1) : 0;
+            return K.Dist(px, py, ax + dx * t, ay + dy * t);
+        }
+        // distance to the dirt roads: from each flag a road forks to both bridges
+        public static float RoadDist(float x, float y)
+        {
+            float d = 1e9f;
+            foreach (float by in K.BYS)
+            {
+                d = Mathf.Min(d, SegDist(x, y, K.FLX, K.BY, K.FLX + 260, K.BY + (by - K.BY) * 0.55f));
+                d = Mathf.Min(d, SegDist(x, y, K.FLX + 260, K.BY + (by - K.BY) * 0.55f, K.BXA + 40, by));
+                d = Mathf.Min(d, SegDist(x, y, K.W - K.FLX, K.BY, K.W - K.FLX - 260, K.BY + (by - K.BY) * 0.55f));
+                d = Mathf.Min(d, SegDist(x, y, K.W - K.FLX - 260, K.BY + (by - K.BY) * 0.55f, K.BXB - 40, by));
+            }
+            return d;
+        }
         public static bool IsLand(float x, float y) { return OnBridge(x, y) || LandQ(x, y) < 1f; }
         public static bool IsWater(float x, float y) { return LandQ(x, y) > 1.03f && x > K.WX0 && x < K.WX1 && y > K.WY0 && y < K.WY1; }
         public static float DeckH(float x) { return K.Clamp(2f + Mathf.Min(x - K.BXA, K.BXB - x) * 0.12f, 2f, K.DECK); }
@@ -318,7 +340,7 @@ namespace WarOfBalls
                 float a = K.Rnd(0, 6.28f), r = Mathf.Sqrt(UnityEngine.Random.value) * qmax, x = I.cx + Mathf.Cos(a) * I.rx * r, y = I.cy + Mathf.Sin(a) * I.ry * r;
                 if (IslandQ(I, x, y) > qmax) continue;
                 if (K.Dist(x, y, K.FLX, K.H / 2f) < pad || K.Dist(x, y, K.W - K.FLX, K.H / 2f) < pad) continue;
-                if (Mathf.Abs(y - K.BY) < 110f && Mathf.Abs(x - K.W / 2f) < K.W / 2f - K.FLX - 40f) continue;
+                if (RoadDist(x, y) < 60f) continue;
                 if ((x > K.ZX0 - 30 && x < K.ZX1 + 30 && y > K.ZY0 - 30 && y < K.ZY1 + 30) || (x > K.W - K.ZX1 - 30 && x < K.W - K.ZX0 + 30 && y > K.ZY0 - 30 && y < K.ZY1 + 30)) continue;
                 p = new Vector2(x, y); return true;
             }
@@ -355,7 +377,7 @@ namespace WarOfBalls
                     float a = K.Rnd(0, 6.28f), r = 0.5f;
                     for (int k = 0; k < 40; k++) { r += 0.015f; if (IslandQ(I, I.cx + Mathf.Cos(a) * I.rx * r, I.cy + Mathf.Sin(a) * I.ry * r) > 0.96f) break; }
                     float x = I.cx + Mathf.Cos(a) * I.rx * (r - 0.02f), y = I.cy + Mathf.Sin(a) * I.ry * (r - 0.02f);
-                    if (Mathf.Abs(y - K.BY) < 90f && (side == 'L' ? x > I.cx : x < I.cx)) continue;
+                    if (BridgeGap(y) < 90f && (side == 'L' ? x > I.cx : x < I.cx)) continue;
                     palms.Add(new Palm { x = x, y = y, s = K.Rnd(0.8f, 1.3f), r = K.Rnd(0, 6.28f) });
                 }
                 for (int i = 0; i < 40; i++)
@@ -380,17 +402,35 @@ namespace WarOfBalls
 
         // ---------- navigation ----------
         public static char Side(float x, float y) { return OnBridge(x, y) ? 'B' : (x < K.W / 2f ? 'L' : 'R'); }
-        static Vector2 BEND(char s) { return s == 'L' ? new Vector2(K.BXA - 30f, K.BY) : new Vector2(K.BXB + 30f, K.BY); }
+        static Vector2 BEND(char s, int i) { return s == 'L' ? new Vector2(K.BXA - 30f, K.BYS[i]) : new Vector2(K.BXB + 30f, K.BYS[i]); }
+        static float PathLen(float x, float y, List<Vector2> r) { float d = 0; foreach (Vector2 p in r) { d += K.Dist(x, y, p.x, p.y); x = p.x; y = p.y; } return d; }
+        // two bridges: the route takes whichever crossing is shorter
         public static List<Vector2> Route(float x0, float y0, float x1, float y1)
         {
             char a = Side(x0, y0), b = Side(x1, y1);
+            int ia = BridgeIdx(y0), ib = BridgeIdx(y1);
             List<Vector2> r = new List<Vector2>();
-            if (a == b) { r.Add(new Vector2(x1, y1)); return r; }
-            if (a == 'B') { r.Add(BEND(b)); r.Add(new Vector2(x1, y1)); return r; }
-            if (b == 'B') { r.Add(BEND(a)); r.Add(new Vector2(x1, y1)); }
-            else { r.Add(BEND(a)); r.Add(BEND(b)); r.Add(new Vector2(x1, y1)); }
-            Vector2 e = BEND(a);
-            if (K.Dist(x0, y0, e.x, e.y) < 34f) r.RemoveAt(0); // already at the bridge end: step straight onto the deck
+            if (a == b && (a != 'B' || ia == ib)) { r.Add(new Vector2(x1, y1)); return r; }
+            if (a == 'B' && b == 'B')
+            {
+                // from one bridge to the other: back to the nearer island, then over
+                char s = x0 < K.W / 2f ? 'L' : 'R';
+                r.Add(BEND(s, ia)); r.Add(BEND(s, ib)); r.Add(new Vector2(x1, y1)); return r;
+            }
+            if (a == 'B') { r.Add(BEND(b, ia)); r.Add(new Vector2(x1, y1)); return r; }
+            if (b == 'B') { r.Add(BEND(a, ib)); r.Add(new Vector2(x1, y1)); }
+            else
+            {
+                List<Vector2> best = null; float bl = 1e9f;
+                for (int i = 0; i < 2; i++)
+                {
+                    List<Vector2> c = new List<Vector2> { BEND(a, i), BEND(b, i), new Vector2(x1, y1) };
+                    float l = PathLen(x0, y0, c); if (l < bl) { bl = l; best = c; }
+                }
+                r = best;
+            }
+            Vector2 e = r[0];
+            if (r.Count > 1 && K.Dist(x0, y0, e.x, e.y) < 34f) r.RemoveAt(0); // already at the bridge end: step straight onto the deck
             return r;
         }
         public static Vector2 RouteFirst(float x0, float y0, float x1, float y1) { return Route(x0, y0, x1, y1)[0]; }
@@ -404,9 +444,10 @@ namespace WarOfBalls
         {
             if (IsLand(x, y)) return new Vector2(x, y);
             bool has = false; float bx = 0, byy = 0, bd = 0;
-            if (x > K.BXA - 40 && x < K.BXB + 40 && Mathf.Abs(y - K.BY) < K.BW + 160)
+            float bry = K.BYS[BridgeIdx(y)];
+            if (x > K.BXA - 40 && x < K.BXB + 40 && Mathf.Abs(y - bry) < K.BW + 160)
             {
-                bx = K.Clamp(x, K.BXA, K.BXB); byy = K.Clamp(y, K.BY - K.BW + 8, K.BY + K.BW - 8); bd = K.Dist(bx, byy, x, y); has = true;
+                bx = K.Clamp(x, K.BXA, K.BXB); byy = K.Clamp(y, bry - K.BW + 8, bry + K.BW - 8); bd = K.Dist(bx, byy, x, y); has = true;
             }
             foreach (Island I in ISL)
             {
