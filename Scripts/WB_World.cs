@@ -91,7 +91,7 @@ namespace WarOfBalls
             Color tint = K.C(0x9fd2f0);
             for (int i = 0; i < c.px.Length; i++) { Color p = c.px[i] * tint; p.a = 0.8f; c.px[i] = p; }
             waveTex = c.ToTexture(); waveTex.wrapMode = TextureWrapMode.Repeat; waveTex.anisoLevel = 4;
-            Shader ut = Shader.Find("Unlit/Transparent");
+            Shader ut = Mats.UnlitTransparent();
             waterTiles = ut != null;
             waterMat = waterTiles ? new Material(ut) : Mats.UnlitNew(Color.white, waveTex, 3000);
             if (waterTiles) { waterMat.mainTexture = waveTex; waterMat.mainTextureScale = new Vector2(220, 220); waterMat.renderQueue = 3000; }
@@ -166,7 +166,7 @@ namespace WarOfBalls
                 }
             for (int j = 0; j < cy; j++) for (int i = 0; i < cx; i++) { int a = j * (cx + 1) + i, b = a + 1, c = a + cx + 1, d = c + 1; AddTriUp(CT, CV, a, b, d); AddTriUp(CT, CV, a, d, c); }
             cloudMesh = new Mesh(); cloudMesh.SetVertices(CV); cloudMesh.SetUVs(0, CU); cloudMesh.SetColors(CC); cloudMesh.SetTriangles(CT, 0); cloudMesh.RecalculateBounds(); cloudUV0 = CU.ToArray();
-            Shader ut = Shader.Find("Unlit/Transparent"); cloudTiles = ut != null;
+            Shader ut = Mats.UnlitTransparent(); cloudTiles = ut != null;
             if (cloudMat == null) { cloudMat = cloudTiles ? new Material(ut) : Mats.UnlitNew(Color.white, cloudTex, 2990); cloudMat.mainTexture = cloudTex; cloudMat.renderQueue = 2990; }
             cloudMat.color = new Color(1, 1, 1, TOD[Terra.tod].name == "Пасмурно" ? 0.65f : 1f);
             GameObject cgo = new GameObject("CloudShadows"); cgo.transform.SetParent(terrainRoot, false);

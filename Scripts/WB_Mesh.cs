@@ -232,11 +232,19 @@ namespace WarOfBalls
             if (ready) return; ready = true;
             URP = GraphicsSettings.currentRenderPipeline != null;
             if (URP) { lit = Shader.Find("Universal Render Pipeline/Lit"); if (lit == null) lit = Shader.Find("Universal Render Pipeline/Simple Lit"); }
+            // the Resources materials make sure the shaders (and their instancing variants) end up in a built .exe
+            if (lit == null) { Material rl = Resources.Load<Material>("WB_Lit"); if (rl != null && rl.shader != null && rl.shader.isSupported) lit = rl.shader; }
             if (lit == null) lit = Shader.Find("Standard");
             if (lit == null) lit = Shader.Find("Legacy Shaders/Diffuse");
-            unlit = Shader.Find("Sprites/Default");
+            Material ru = Resources.Load<Material>("WB_Sprites"); if (ru != null && ru.shader != null && ru.shader.isSupported) unlit = ru.shader;
+            if (unlit == null) unlit = Shader.Find("Sprites/Default");
             if (unlit == null) unlit = Shader.Find("Universal Render Pipeline/Unlit");
             if (unlit == null) unlit = Shader.Find("Unlit/Color");
+        }
+        public static Shader UnlitTransparent()
+        {
+            Material r = Resources.Load<Material>("WB_UnlitTransparent"); if (r != null && r.shader != null && r.shader.isSupported) return r.shader;
+            return Shader.Find("Unlit/Transparent");
         }
         static string Key(Color c) { Color32 k = c; return k.r + "," + k.g + "," + k.b + "," + k.a; }
         public static Material Lit(Color c, float gloss = 0f, bool inst = false)
@@ -247,7 +255,7 @@ namespace WarOfBalls
             if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", gloss);
             if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", gloss);
             if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
-            if (gloss <= 0.2f) { m.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF"); m.EnableKeyword("_SPECULARHIGHLIGHTS_OFF"); if (m.HasProperty("_SpecularHighlights")) m.SetFloat("_SpecularHighlights", 0f); if (m.HasProperty("_EnvironmentReflections")) m.SetFloat("_EnvironmentReflections", 0f); }
+            if (gloss <= 0.2f) { m.EnableKeyword("_GLOSSYREFLECTIONS_OFF"); m.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF"); m.EnableKeyword("_SPECULARHIGHLIGHTS_OFF"); if (m.HasProperty("_SpecularHighlights")) m.SetFloat("_SpecularHighlights", 0f); if (m.HasProperty("_EnvironmentReflections")) m.SetFloat("_EnvironmentReflections", 0f); }
             m.enableInstancing = inst; cache[key] = m; return m;
         }
         // a fresh (not shared) lit material — used where colours change at runtime (wrecks, flags)
@@ -267,7 +275,7 @@ namespace WarOfBalls
             if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
             if (m.HasProperty("_EnvironmentReflections")) m.SetFloat("_EnvironmentReflections", 0f);
             if (m.HasProperty("_SpecularHighlights")) m.SetFloat("_SpecularHighlights", 0f);
-            m.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF"); m.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+            m.EnableKeyword("_GLOSSYREFLECTIONS_OFF"); m.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF"); m.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
             return m;
         }
         // unlit, alpha-blended, vertex-coloured, double sided (Sprites/Default)
